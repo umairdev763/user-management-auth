@@ -1,0 +1,201 @@
+<div class="page-header">
+  <div>
+    <span class="badge">Admin only</span>
+    <h1 id="blogFormTitle">{{#if (eq mode 'edit')}}Edit Blog{{else}}Create New Blog{{/if}}</h1>
+    <p>Manage title, images, status and multiple locations.</p>
+  </div>
+  <a class="btn secondary" href="/admin/list_blog">Back to blogs</a>
+</div>
+
+<div class="card">
+  <div id="blogMessage" class="message"></div>
+  <form id="blogForm" enctype="multipart/form-data">
+    <input type="hidden" id="blogId" value="{{blogId}}">
+
+    <label>Title *
+      <input id="blogTitle" name="title" maxlength="200" required>
+      <small>Permalink is generated automatically from the title.</small>
+    </label>
+
+    <label>Description
+      <textarea id="blogDescription" name="description" rows="7"></textarea>
+    </label>
+
+    <div class="grid two">
+      <label>Status *
+        <select id="blogStatus" name="status">
+          <option value="draft">Draft</option>
+          <option value="published">Published</option>
+        </select>
+      </label>
+      <div>
+        <label>Feature Image * (exactly 1 on create)
+          <input id="featureImage" name="featureImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+        </label>
+        <div id="featurePreview" class="image-preview"></div>
+      </div>
+    </div>
+
+    <label>Gallery Images * (1–10 on create; up to 10 total on edit)
+      <input id="galleryImages" name="galleryImages" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
+      <small>Maximum 5MB per image. On edit, selected images are added to the existing gallery.</small>
+    </label>
+    <div id="galleryPreview" class="image-grid"></div>
+
+    <div class="section-header">
+      <div>
+        <h2>Locations</h2>
+        <small>Add as many address records as needed.</small>
+      </div>
+      <button type="button" class="small-btn" id="addLocationBtn">Add location</button>
+    </div>
+    <div id="locationsList"></div>
+
+    <button class="btn" type="submit" id="saveBlogBtn">{{#if (eq mode 'edit')}}Update Blog{{else}}Create Blog{{/if}}</button>
+  </form>
+</div>
+
+<script>
+$(function () {
+  const mode = '{{mode}}';
+  const blogId = $('#blogId').val();
+  let existingGallery = [];
+  let locations = [];
+
+  function showMessage(text, type = '') {
+    $('#blogMessage').removeClass('error success').text(text).addClass(type);
+  }
+
+  function handleAuthError(xhr) {
+    if (xhr.status === 401 || xhr.status === 403) window.location.href = '/login';
+    else showMessage(xhr.responseJSON?.message || 'Request failed.', 'error');
+  }
+
+  function renderLocations() {
+    $('#locationsList').html(locations.map((location, index) => `
+      <div class="location-row" data-index="${index}">
+        <input class="location-name" placeholder="Location name" value="${escapeHtml(location.name || '')}">
+        <input class="location-city" placeholder="City" value="${escapeHtml(location.city || '')}">
+        <button type="button" class="small-btn danger remove-location">Remove</button>
+      </div>`).join(''));
+  }
+
+  function readLocations() {
+    locations = $('.location-row').map(function () {
+      return {
+        name: $(this).find('.location-name').val().trim(),
+        city: $(this).find('.location-city').val().trim()
+      };
+    }).get();
+  }
+
+  function escapeHtml(value) {
+    return $('<div>').text(value ?? '').html();
+  }
+
+  function renderExistingImages(blog) {
+    if (blog.featureImage?.path) {
+      $('#featurePreview').html(`<div class="preview-card"><img src="${escapeHtml(blog.featureImage.path)}" alt="Feature image"><span>Current feature image</span></div>`);
+    }
+    existingGallery = blog.galleryImages || [];
+    renderGallery();
+  }
+
+  function renderGallery() {
+    const current = existingGallery.map(image => `
+      <div class="preview-card gallery-card" data-filename="${escapeHtml(image.filename)}">
+        <img src="${escapeHtml(image.path)}" alt="Gallery image">
+        <button type="button" class="small-btn danger delete-gallery" data-filename="${escapeHtml(image.filename)}">Delete</button>
+      </div>`).join('');
+    $('#galleryPreview').html(current);
+  }
+
+  $('#addLocationBtn').on('click', function () {
+    readLocations();
+    locations.push({ name: '', city: '' });
+    renderLocations();
+  });
+
+  $(document).on('click', '.remove-location', function () {
+    readLocations();
+    locations.splice($(this).closest('.location-row').index(), 1);
+    renderLocations();
+  });
+
+  $('#galleryImages').on('change', function () {
+    const files = Array.from(this.files);
+    if (mode === 'create' && (files.length < 1 || files.length > 10)) {
+      showMessage('Create requires 1 to 10 gallery images.', 'error');
+      this.value = '';
+      return;
+    }
+    if (mode === 'edit' && existingGallery.length + files.length > 10) {
+      showMessage(`You can have at most 10 gallery images. Current: ${existingGallery.length}.`, 'error');
+      this.value = '';
+    }
+  });
+
+  $(document).on('click', '.delete-gallery', function () {
+    if (existingGallery.length <= 1) return showMessage('A blog must keep at least one gallery image.', 'error');
+    if (!confirm('Delete this gallery image?')) return;
+    const filename = $(this).data('filename');
+    $.ajax({
+      url: '/api/admin/blogs/' + blogId + '/gallery-image',
+      method: 'DELETE',
+      contentType: 'application/json',
+      data: JSON.stringify({ filename })
+    }).done(() => {
+      existingGallery = existingGallery.filter(image => image.filename !== filename);
+      renderGallery();
+      showMessage('Gallery image deleted.', 'success');
+    }).fail(handleAuthError);
+  });
+
+  $('#blogForm').on('submit', function (e) {
+    e.preventDefault();
+    readLocations();
+
+    if (mode === 'create' && !$('#featureImage')[0].files.length) return showMessage('Exactly one feature image is required.', 'error');
+    if (mode === 'create' && !$('#galleryImages')[0].files.length) return showMessage('At least one gallery image is required.', 'error');
+    if (locations.some(location => !location.name || !location.city)) return showMessage('Every location needs both name and city.', 'error');
+
+    const formData = new FormData();
+    formData.append('title', $('#blogTitle').val());
+    formData.append('description', $('#blogDescription').val());
+    formData.append('status', $('#blogStatus').val());
+    formData.append('locations', JSON.stringify(locations));
+
+    const feature = $('#featureImage')[0].files[0];
+    if (feature) formData.append('featureImage', feature);
+    Array.from($('#galleryImages')[0].files).forEach(file => formData.append('galleryImages', file));
+
+    const isEdit = mode === 'edit';
+    $('#saveBlogBtn').prop('disabled', true);
+    $.ajax({
+      url: isEdit ? '/api/admin/blogs/' + blogId : '/api/admin/blogs',
+      method: isEdit ? 'PUT' : 'POST',
+      data: formData,
+      processData: false,
+      contentType: false
+    }).done(() => {
+      showMessage(isEdit ? 'Blog updated successfully.' : 'Blog created successfully.', 'success');
+      setTimeout(() => { window.location.href = '/admin/list_blog'; }, 500);
+    }).fail(handleAuthError).always(() => $('#saveBlogBtn').prop('disabled', false));
+  });
+
+  if (mode === 'edit') {
+    if (!blogId) return showMessage('Blog ID is missing.', 'error');
+    $.get('/api/admin/blogs/' + blogId).done(({ blog }) => {
+      $('#blogTitle').val(blog.title);
+      $('#blogDescription').val(blog.description || '');
+      $('#blogStatus').val(blog.status);
+      locations = blog.locations || [];
+      renderLocations();
+      renderExistingImages(blog);
+    }).fail(handleAuthError);
+  } else {
+    locations = [];
+    renderLocations();
+  }
+});
+</script>

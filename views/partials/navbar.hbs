@@ -1,13 +1,12 @@
 <nav class="navbar">
   <div class="nav-inner">
-    <a class="brand" href="/">User Manager</a>
+    <a class="brand" href="/">User & Blogs Management</a>
     <div class="nav-links">
-      <a href="/">Home</a>
-      <a href="/login">Login</a>
-      <a href="/register">Register</a>
-      <a href="/dashboard">Dashboard</a>
-      <a href="/admin">Admin</a>
-      <button id="logoutBtn" class="link-button" type="button">Logout</button>
+      {{#unless user}}<a href="/login">Login</a>{{/unless}}
+      {{#unless user}}<a href="/register">Register</a>{{/unless}}
+      {{#if (eq user.role 'admin')}}<a href="/admin/list_blog">News & Blogs</a>{{else}}<a href="/news_blogs">News & Blogs</a>{{/if}}
+      {{#if (eq user.role 'admin')}}<a href="/admin">Admin Dashboard</a>{{/if}}
+      {{#if user}}<button id="logoutBtn" class="link-button" type="button">Logout</button>{{/if}}
     </div>
   </div>
 </nav>

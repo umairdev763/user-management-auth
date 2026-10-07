@@ -1,0 +1,28 @@
+<div class="page-header">
+  <div>
+    <span class="badge">Published</span>
+    <h1>News & Blogs</h1>
+    <p>Latest published stories and updates.</p>
+  </div>
+</div>
+
+<div class="blog-grid">
+  {{#if blogs.length}}
+    {{#each blogs}}
+      <article class="blog-card">
+        <img src="{{featureImage.path}}" alt="{{title}}">
+        <div class="blog-card-body">
+          <span class="status published">Published</span>
+          <h2>{{title}}</h2>
+          <p>{{description}}</p>
+          {{#if locations.length}}
+            <p class="muted">{{locations.length}} location{{#unless (eq locations.length 1)}}s{{/unless}}</p>
+          {{/if}}
+          <small>{{createdAt}}</small>
+        </div>
+      </article>
+    {{/each}}
+  {{else}}
+    <div class="card center"><h2>No published blogs yet.</h2></div>
+  {{/if}}
+</div>

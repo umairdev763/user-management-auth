@@ -12,6 +12,10 @@ async function connectDB() {
   await db.collection('users').createIndex({ email: 1 }, { unique: true });
   await db.collection('users').createIndex({ name: 1 });
 
+  await db.collection('blogs').createIndex({ permalink: 1 }, { unique: true });
+  await db.collection('blogs').createIndex({ status: 1, createdAt: -1 });
+  await db.collection('blogs').createIndex({ createdAt: -1 });
+
   console.log(`MongoDB connected: ${process.env.DB_NAME}`);
   return db;
 }
@@ -25,4 +29,8 @@ function usersCollection() {
   return getDB().collection('users');
 }
 
-module.exports = { connectDB, getDB, usersCollection };
+function blogsCollection() {
+  return getDB().collection('blogs');
+}
+
+module.exports = { connectDB, getDB, usersCollection, blogsCollection };

@@ -1,0 +1,72 @@
+<div class="page-header">
+  <div>
+    <span class="badge">Admin only</span>
+    <h1>Blogs & News</h1>
+    <p>Create, search, edit and delete your content.</p>
+  </div>
+  <a class="btn" href="/admin/create_new_blog">Create new blog</a>
+</div>
+
+<div id="blogMessage" class="message"></div>
+<div class="card">
+  <div class="toolbar">
+    <input id="blogSearch" type="search" placeholder="Search title or permalink...">
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Image</th><th>Title</th><th>Permalink</th><th>Status</th><th>Locations</th><th>Created</th><th>Actions</th></tr></thead>
+      <tbody id="blogsTable"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+$(function () {
+  let blogs = [];
+
+  function escapeHtml(value) { return $('<div>').text(value ?? '').html(); }
+  function showMessage(text, type = '') { $('#blogMessage').removeClass('error success').text(text).addClass(type); }
+  function handleError(xhr) {
+    if (xhr.status === 401 || xhr.status === 403) window.location.href = '/login';
+    else showMessage(xhr.responseJSON?.message || 'Request failed.', 'error');
+  }
+
+  function loadBlogs() {
+    $.get('/api/admin/blogs', { search: $('#blogSearch').val() })
+      .done(data => { blogs = data.blogs; render(); })
+      .fail(handleError);
+  }
+
+  function render() {
+    const rows = blogs.map(blog => `
+      <tr>
+        <td><img class="table-thumb" src="${escapeHtml(blog.featureImage?.path)}" alt=""></td>
+        <td>${escapeHtml(blog.title)}</td>
+        <td><code>${escapeHtml(blog.permalink)}</code></td>
+        <td><span class="status ${escapeHtml(blog.status)}">${escapeHtml(blog.status)}</span></td>
+        <td>${(blog.locations || []).length}</td>
+        <td>${new Date(blog.createdAt).toLocaleDateString()}</td>
+        <td class="actions-cell">
+          <a class="small-btn" href="/admin/edit_blog?id=${encodeURIComponent(blog._id)}">Edit</a>
+          <button class="small-btn danger delete-blog" data-id="${escapeHtml(blog._id)}">Delete</button>
+        </td>
+      </tr>`).join('');
+    $('#blogsTable').html(rows || '<tr><td colspan="7">No blogs found.</td></tr>');
+  }
+
+  $('#blogSearch').on('input', function () {
+    clearTimeout(window.blogSearchTimer);
+    window.blogSearchTimer = setTimeout(loadBlogs, 250);
+  });
+
+  $(document).on('click', '.delete-blog', function () {
+    const id = $(this).data('id');
+    if (!confirm('Delete this blog and all of its local images?')) return;
+    $.ajax({ url: '/api/admin/blogs/' + id, method: 'DELETE' })
+      .done(() => { showMessage('Blog deleted.', 'success'); loadBlogs(); })
+      .fail(handleError);
+  });
+
+  loadBlogs();
+});
+</script>
