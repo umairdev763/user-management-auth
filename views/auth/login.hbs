@@ -1,0 +1,27 @@
+<div class="auth-card card">
+  <h1>Login</h1>
+  <form id="loginForm">
+    <label>Email<input type="email" name="email" required></label>
+    <label>Password<input type="password" name="password" required></label>
+    <button class="btn" type="submit">Login</button>
+  </form>
+  <div id="message" class="message"></div>
+  <p>New user? <a href="/register">Create an account</a></p>
+</div>
+<script>
+$(function () {
+  $('#loginForm').on('submit', function (e) {
+    e.preventDefault();
+    $.ajax({
+      url: '/api/auth/login',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ email: this.email.value, password: this.password.value })
+    }).done(function () {
+      window.location.href = '/dashboard';
+    }).fail(function (xhr) {
+      $('#message').text(xhr.responseJSON?.message || 'Login failed.').addClass('error');
+    });
+  });
+});
+</script>

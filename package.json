@@ -1,0 +1,22 @@
+{
+  "name": "user-management-auth-hbs",
+  "version": "1.0.0",
+  "description": "Beginner-friendly User Management & Authentication app using Express, Handlebars, MongoDB native driver, JWT and bcrypt.",
+  "main": "app.js",
+  "scripts": {
+    "dev": "node --watch app.js",
+    "start": "node app.js",
+    "seed:admin": "node scripts/seedAdmin.js"
+  },
+  "keywords": ["nodejs", "express", "handlebars", "mongodb", "jwt", "bcrypt"],
+  "license": "MIT",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "express-handlebars": "^8.0.3",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.20.0"
+  }
+}

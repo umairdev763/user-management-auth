@@ -1,0 +1,14 @@
+<div class="page-header">
+  <div>
+    <span class="badge">Protected page</span>
+    <h1>Welcome, {{user.name}}</h1>
+    <p>You are logged in as <strong>{{user.role}}</strong>.</p>
+  </div>
+</div>
+<div class="grid two">
+  <div class="card"><h3>Name</h3><p>{{user.name}}</p></div>
+  <div class="card"><h3>Email</h3><p>{{user.email}}</p></div>
+</div>
+{{#if (eq user.role 'admin')}}
+<div class="card"><h3>Admin access</h3><p>You can open the <a href="/admin">Admin Panel</a>.</p></div>
+{{/if}}

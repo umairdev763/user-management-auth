@@ -1,0 +1,153 @@
+<div class="page-header">
+  <div>
+    <span class="badge">Admin only</span>
+    <h1>Admin Panel</h1>
+    <p>Manage users with AJAX without exposing passwords.</p>
+  </div>
+</div>
+
+<div id="stats" class="grid three">
+  <div class="card stat"><span>Total users</span><strong id="totalUsers">-</strong></div>
+  <div class="card stat"><span>Admins</span><strong id="adminUsers">-</strong></div>
+  <div class="card stat"><span>Regular users</span><strong id="regularUsers">-</strong></div>
+</div>
+
+<div class="card">
+  <div class="toolbar">
+    <input id="searchInput" type="search" placeholder="Search name, email or role...">
+    <button class="btn" id="addUserBtn">Add user</button>
+  </div>
+  <div id="adminMessage" class="message"></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead>
+      <tbody id="usersTable"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="userModal" class="modal hidden">
+  <div class="modal-box">
+    <button class="modal-close" id="closeModal">×</button>
+    <h2 id="modalTitle">Add user</h2>
+    <form id="userForm">
+      <input type="hidden" id="userId">
+      <label>Name<input id="userName" required></label>
+      <label>Email<input id="userEmail" type="email" required></label>
+      <label>Password<input id="userPassword" type="password" minlength="6"><small>Required when adding; optional when editing.</small></label>
+      <label>Role<select id="userRole"><option value="user">User</option><option value="admin">Admin</option></select></label>
+      <button class="btn" type="submit">Save</button>
+    </form>
+  </div>
+</div>
+
+<script>
+$(function () {
+  let users = [];
+
+  function showMessage(text, type = '') {
+    $('#adminMessage').removeClass('error success').text(text).addClass(type);
+  }
+
+  function loadStats() {
+    $.get('/api/admin/stats').done(({ stats }) => {
+      $('#totalUsers').text(stats.total);
+      $('#adminUsers').text(stats.admins);
+      $('#regularUsers').text(stats.regularUsers);
+    }).fail(handleAuthError);
+  }
+
+  function loadUsers() {
+    $.get('/api/users', { search: $('#searchInput').val() })
+      .done(data => {
+        users = data.users;
+        renderUsers();
+      }).fail(handleAuthError);
+  }
+
+  function renderUsers() {
+    const rows = users.map(user => `
+      <tr>
+        <td>${escapeHtml(user.name)}</td>
+        <td>${escapeHtml(user.email)}</td>
+        <td><span class="role">${escapeHtml(user.role)}</span></td>
+        <td>${new Date(user.createdAt).toLocaleDateString()}</td>
+        <td class="actions-cell">
+          <button class="small-btn edit-btn" data-id="${user._id}">Edit</button>
+          <button class="small-btn danger delete-btn" data-id="${user._id}">Delete</button>
+        </td>
+      </tr>`).join('');
+    $('#usersTable').html(rows || '<tr><td colspan="5">No users found.</td></tr>');
+  }
+
+  function escapeHtml(value) {
+    return $('<div>').text(value ?? '').html();
+  }
+
+  function handleAuthError(xhr) {
+    if (xhr.status === 401 || xhr.status === 403) window.location.href = '/login';
+    else showMessage(xhr.responseJSON?.message || 'Request failed.', 'error');
+  }
+
+  function openModal(user) {
+    $('#userForm')[0].reset();
+    $('#userId').val(user?._id || '');
+    $('#userName').val(user?.name || '');
+    $('#userEmail').val(user?.email || '');
+    $('#userRole').val(user?.role || 'user');
+    $('#userPassword').val('');
+    $('#modalTitle').text(user ? 'Edit user' : 'Add user');
+    $('#userModal').removeClass('hidden');
+  }
+
+  $('#addUserBtn').on('click', () => openModal());
+  $('#closeModal').on('click', () => $('#userModal').addClass('hidden'));
+
+  $('#searchInput').on('input', function () {
+    clearTimeout(window.searchTimer);
+    window.searchTimer = setTimeout(loadUsers, 250);
+  });
+
+  $(document).on('click', '.edit-btn', function () {
+    const user = users.find(u => u._id === $(this).data('id'));
+    if (user) openModal(user);
+  });
+
+  $(document).on('click', '.delete-btn', function () {
+    const id = $(this).data('id');
+    if (!confirm('Delete this user?')) return;
+    $.ajax({ url: '/api/users/' + id, method: 'DELETE' })
+      .done(() => { showMessage('User deleted.', 'success'); loadStats(); loadUsers(); })
+      .fail(handleAuthError);
+  });
+
+  $('#userForm').on('submit', function (e) {
+    e.preventDefault();
+    const id = $('#userId').val();
+    const payload = {
+      name: $('#userName').val(),
+      email: $('#userEmail').val(),
+      role: $('#userRole').val()
+    };
+    if ($('#userPassword').val()) payload.password = $('#userPassword').val();
+
+    const adding = !id;
+    if (adding && !payload.password) return showMessage('Password is required when adding a user.', 'error');
+
+    $.ajax({
+      url: adding ? '/api/users' : '/api/users/' + id,
+      method: adding ? 'POST' : 'PUT',
+      contentType: 'application/json',
+      data: JSON.stringify(adding ? { ...payload, password: payload.password } : payload)
+    }).done(() => {
+      $('#userModal').addClass('hidden');
+      showMessage(adding ? 'User added.' : 'User updated.', 'success');
+      loadStats();
+      loadUsers();
+    }).fail(handleAuthError);
+  });
+
+  loadStats();
+  loadUsers();
+});
+</script>

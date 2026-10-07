@@ -1,0 +1,29 @@
+<div class="auth-card card">
+  <h1>Create account</h1>
+  <form id="registerForm">
+    <label>Name<input type="text" name="name" required></label>
+    <label>Email<input type="email" name="email" required></label>
+    <label>Password<input type="password" name="password" minlength="6" required></label>
+    <button class="btn" type="submit">Register</button>
+  </form>
+  <div id="message" class="message"></div>
+  <p>Already registered? <a href="/login">Login</a></p>
+</div>
+<script>
+$(function () {
+  $('#registerForm').on('submit', function (e) {
+    e.preventDefault();
+    $.ajax({
+      url: '/api/auth/register',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ name: this.name.value, email: this.email.value, password: this.password.value })
+    }).done(function () {
+      $('#message').text('Registered successfully. Redirecting to login...').addClass('success');
+      setTimeout(() => window.location.href = '/login', 700);
+    }).fail(function (xhr) {
+      $('#message').text(xhr.responseJSON?.message || 'Registration failed.').addClass('error');
+    });
+  });
+});
+</script>
