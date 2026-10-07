@@ -189,7 +189,7 @@ $(function () {
     $('#galleryPreview').html(current);
   }
 
-  $(document).on('click', '.delete-gallery', function () {
+  $(document).on('click', '.delete-gallery', function () { 
     if (existingGallery.length <= 1) return showMessage('A model must keep at least one gallery image.', 'error');
     if (!confirm('Delete this gallery image?')) return;
     const filename = $(this).data('filename');
