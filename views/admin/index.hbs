@@ -4,13 +4,22 @@
     <h1>Admin Panel</h1>
     <p>Manage users and content with AJAX without exposing passwords.</p>
   </div>
-  <a class="btn" href="/admin/list_blog">Manage Blogs</a>
+  <div class="actions">
+    <a class="btn secondary" href="/admin/list_blog">Manage Blogs</a>
+    <a class="btn" href="/admin/list_model">Manage Models</a>
+  </div>
 </div>
 
 <div id="stats" class="grid three">
   <div class="card stat"><span>Total users</span><strong id="totalUsers">-</strong></div>
   <div class="card stat"><span>Admins</span><strong id="adminUsers">-</strong></div>
   <div class="card stat"><span>Regular users</span><strong id="regularUsers">-</strong></div>
+  <div class="card stat"><span>Total blogs</span><strong id="totalBlogs">-</strong></div>
+  <div class="card stat"><span>Published blogs</span><strong id="publishedBlogs">-</strong></div>
+  <div class="card stat"><span>Draft blogs</span><strong id="draftBlogs">-</strong></div>
+  <div class="card stat"><span>Total models</span><strong id="totalModels">-</strong></div>
+  <div class="card stat"><span>Published models</span><strong id="publishedModels">-</strong></div>
+  <div class="card stat"><span>Draft models</span><strong id="draftModels">-</strong></div>
 </div>
 
 <div class="card">
@@ -55,6 +64,12 @@ $(function () {
       $('#totalUsers').text(stats.total);
       $('#adminUsers').text(stats.admins);
       $('#regularUsers').text(stats.regularUsers);
+      $('#totalBlogs').text(stats.blogs?.total || 0);
+      $('#publishedBlogs').text(stats.blogs?.published || 0);
+      $('#draftBlogs').text(stats.blogs?.drafts || 0);
+      $('#totalModels').text(stats.models?.total || 0);
+      $('#publishedModels').text(stats.models?.published || 0);
+      $('#draftModels').text(stats.models?.drafts || 0);
     }).fail(handleAuthError);
   }
 

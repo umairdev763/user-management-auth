@@ -12,6 +12,9 @@ router.get('/admin', requireAdmin, (req, res) => res.render('admin/index', { tit
 router.get('/admin/create_new_blog', requireAdmin, (req, res) => res.render('admin/blog/form', { title: 'Create New Blog', user: req.user, mode: 'create' }));
 router.get('/admin/list_blog', requireAdmin, (req, res) => res.render('admin/blog/list', { title: 'Blog List', user: req.user }));
 router.get('/admin/edit_blog', requireAdmin, (req, res) => res.render('admin/blog/form', { title: 'Edit Blog', user: req.user, blogId: req.query.id, mode: 'edit' }));
+router.get('/admin/create_new_model', requireAdmin, (req, res) => res.render('admin/model/form', { title: 'Create New Model', user: req.user, mode: 'create' }));
+router.get('/admin/list_model', requireAdmin, (req, res) => res.render('admin/model/list', { title: 'Model List', user: req.user }));
+router.get('/admin/edit_model', requireAdmin, (req, res) => res.render('admin/model/form', { title: 'Edit Model', user: req.user, modelId: req.query.id, mode: 'edit' }));
 router.get('/news', publicNewsBlogs);
 router.get('/news_blogs', publicNewsBlogs);
 

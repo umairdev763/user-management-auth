@@ -16,6 +16,10 @@ async function connectDB() {
   await db.collection('blogs').createIndex({ status: 1, createdAt: -1 });
   await db.collection('blogs').createIndex({ createdAt: -1 });
 
+  await db.collection('models').createIndex({ permalink: 1 }, { unique: true });
+  await db.collection('models').createIndex({ status: 1, createdAt: -1 });
+  await db.collection('models').createIndex({ createdAt: -1 });
+
   console.log(`MongoDB connected: ${process.env.DB_NAME}`);
   return db;
 }
@@ -33,4 +37,8 @@ function blogsCollection() {
   return getDB().collection('blogs');
 }
 
-module.exports = { connectDB, getDB, usersCollection, blogsCollection };
+function modelsCollection() {
+  return getDB().collection('models');
+}
+
+module.exports = { connectDB, getDB, usersCollection, blogsCollection, modelsCollection };

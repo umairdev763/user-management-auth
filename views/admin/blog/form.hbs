@@ -168,7 +168,7 @@ $(function () {
     const feature = $('#featureImage')[0].files[0];
     if (feature) formData.append('featureImage', feature);
     Array.from($('#galleryImages')[0].files).forEach(file => formData.append('galleryImages', file));
-
+ 
     const isEdit = mode === 'edit';
     $('#saveBlogBtn').prop('disabled', true);
     $.ajax({

@@ -1,0 +1,529 @@
+<div class="page-header">
+  <div>
+    <span class="badge">Admin only</span>
+    <h1 id="modelFormTitle">{{#if (eq mode 'edit')}}Edit Model{{else}}Create New Model{{/if}}</h1>
+    <p>Manage boat specifications and hull color configurations.</p>
+  </div>
+  <a class="btn secondary" href="/admin/list_model">Back to models</a>
+</div>
+
+<div class="card">
+  <div id="modelMessage" class="message"></div>
+
+  <!-- Edit Name Modal -->
+  <div id="editNameModal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <h3>Edit Section Name</h3>
+      <label>New Name
+        <input type="text" id="editNameInput" maxlength="200">
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="btn secondary" id="cancelEditName">Cancel</button>
+        <button type="button" class="btn" id="saveEditName">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="specs">Specs</button>
+    <button class="tab-btn" data-tab="hull-colors">Hull Colors</button>
+  </div>
+
+  <form id="modelForm" enctype="multipart/form-data">
+    <input type="hidden" id="modelId" value="{{modelId}}">
+
+    <!-- Specs Tab -->
+    <div class="tab-content active" id="specs-tab">
+      <label>Title *
+        <input id="modelTitle" name="title" maxlength="200" required>
+        <small>Permalink is generated automatically from the title.</small>
+      </label>
+
+      <label>Description
+        <textarea id="modelDescription" name="description" rows="5"></textarea>
+      </label>
+
+      <div class="grid three">
+        <label>Year *
+          <input id="modelYear" name="year" type="number" required>
+        </label>
+        <label>Make *
+          <input id="modelMake" name="make" required>
+        </label>
+        <label>Model *
+          <input id="modelModel" name="model" required>
+        </label>
+      </div>
+
+      <label>Category *
+        <select id="modelCategory" name="category" required>
+          <option value="">Select category</option>
+          <option value="Sport">Sport</option>
+          <option value="Cruiser">Cruiser</option>
+          <option value="Fishing">Fishing</option>
+          <option value="Yacht">Yacht</option>
+          <option value="Pontoon">Pontoon</option>
+          <option value="Other">Other</option>
+        </select>
+      </label>
+
+      <div class="grid two">
+        <div>
+          <label>Feature Image *
+            <input id="featureImage" name="featureImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+          </label>
+          <div id="featurePreview" class="image-preview"></div>
+        </div>
+        <div>
+          <label>Gallery Images * (1-10)
+            <input id="galleryImages" name="galleryImages" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
+          </label>
+          <small>Maximum 5MB per image.</small>
+          <div id="galleryPreview" class="image-grid"></div>
+        </div>
+      </div>
+
+      <label>Status *
+        <select id="modelStatus" name="status">
+          <option value="draft">Draft</option>
+          <option value="published">Published</option>
+        </select>
+      </label>
+    </div>
+
+    <!-- Hull Colors Tab -->
+    <div class="tab-content" id="hull-colors-tab">
+      <div class="section-header">
+        <h2>Hull Colors Configuration</h2>
+        <small>Add grand parent color sections, then parent sections, then individual colors.</small>
+      </div>
+
+      <button type="button" class="btn" id="addGrandParentBtn">Add New Grand Parent Color</button>
+
+      <div id="hullColorsContainer"></div>
+    </div>
+
+    <button class="btn" type="submit" id="saveModelBtn">{{#if (eq mode 'edit')}}Update Model{{else}}Create Model{{/if}}</button>
+  </form>
+</div>
+
+<script>
+$(function () {
+  const mode = '{{mode}}';
+  const modelId = $('#modelId').val();
+  let existingGallery = [];
+  let hullColors = [];
+
+  function showMessage(text, type = '') {
+    $('#modelMessage').removeClass('error success').text(text).addClass(type);
+  }
+
+  function handleAuthError(xhr) {
+    if (xhr.status === 401 || xhr.status === 403) window.location.href = '/login';
+    else showMessage(xhr.responseJSON?.message || 'Request failed.', 'error');
+  }
+
+  function escapeHtml(value) {
+    return $('<div>').text(value ?? '').html();
+  }
+
+  // Tab switching
+  $('.tab-btn').on('click', function () {
+    $('.tab-btn').removeClass('active');
+    $(this).addClass('active');
+    $('.tab-content').removeClass('active');
+    $('#' + $(this).data('tab') + '-tab').addClass('active');
+  });
+
+  // Feature image preview
+  $('#featureImage').on('change', function () {
+    const file = this.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        $('#featurePreview').html(`<div class="preview-card"><img src="${e.target.result}" alt="Feature image"></div>`);
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  // Gallery images preview
+  $('#galleryImages').on('change', function () {
+    const files = Array.from(this.files);
+    if (mode === 'create' && (files.length < 1 || files.length > 10)) {
+      showMessage('Create requires 1 to 10 gallery images.', 'error');
+      this.value = '';
+      return;
+    }
+    if (mode === 'edit' && existingGallery.length + files.length > 10) {
+      showMessage(`You can have at most 10 gallery images. Current: ${existingGallery.length}.`, 'error');
+      this.value = '';
+    }
+
+    const previews = files.map(file => {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        return `<div class="preview-card"><img src="${e.target.result}" alt="Gallery image"></div>`;
+      };
+      return `<div class="preview-card gallery-card"><span>${escapeHtml(file.name)}</span></div>`;
+    }).join('');
+
+    $('#galleryPreview').append(previews);
+  });
+
+  function renderExistingImages(model) {
+    if (model.featureImage?.path) {
+      $('#featurePreview').html(`<div class="preview-card"><img src="${escapeHtml(model.featureImage.path)}" alt="Feature image"><span>Current feature image</span><button type="button" class="small-btn danger delete-feature" data-filename="${escapeHtml(model.featureImage.filename)}">X</button></div>`);
+    }
+    existingGallery = model.galleryImages || [];
+    renderGallery();
+  }
+
+  function renderGallery() {
+    const current = existingGallery.map(image => `
+      <div class="preview-card gallery-card" data-filename="${escapeHtml(image.filename)}">
+        <img src="${escapeHtml(image.path)}" alt="Gallery image">
+        <button type="button" class="small-btn danger delete-gallery" data-filename="${escapeHtml(image.filename)}">X</button>
+      </div>`).join('');
+    $('#galleryPreview').html(current);
+  }
+
+  $(document).on('click', '.delete-gallery', function () {
+    if (existingGallery.length <= 1) return showMessage('A model must keep at least one gallery image.', 'error');
+    if (!confirm('Delete this gallery image?')) return;
+    const filename = $(this).data('filename');
+    $.ajax({
+      url: '/api/admin/models/' + modelId + '/gallery-image',
+      method: 'DELETE',
+      contentType: 'application/json',
+      data: JSON.stringify({ filename })
+    }).done(() => {
+      existingGallery = existingGallery.filter(image => image.filename !== filename);
+      renderGallery();
+      showMessage('Gallery image deleted.', 'success');
+    }).fail(handleAuthError);
+  });
+
+  $(document).on('click', '.delete-feature', function () {
+    if (!confirm('Delete the current feature image? You will need to upload a new one.')) return;
+    const filename = $(this).data('filename');
+    $.ajax({
+      url: '/api/admin/models/' + modelId + '/feature-image',
+      method: 'DELETE',
+      contentType: 'application/json',
+      data: JSON.stringify({ filename })
+    }).done(() => {
+      $('#featurePreview').html('');
+      showMessage('Feature image deleted. Please upload a new one.', 'success');
+    }).fail(handleAuthError);
+  });
+
+  // Hull Colors - Grand Parent
+  function renderGrandParent(grandParent, gpIndex) {
+    return `
+      <div class="accordion grand-parent" data-gp-index="${gpIndex}">
+        <div class="accordion-header">
+          <div class="header-left">
+            <span class="section-name">${escapeHtml(grandParent.name || 'Grand Parent ' + (gpIndex + 1))}</span>
+            <button type="button" class="icon-btn edit-name" data-level="grandparent" data-index="${gpIndex}">✎</button>
+          </div>
+          <div class="header-right">
+            <button type="button" class="icon-btn toggle-accordion">−</button>
+            <button type="button" class="icon-btn danger delete-section" data-level="grandparent" data-index="${gpIndex}">×</button>
+          </div>
+        </div>
+        <div class="accordion-content">
+          <button type="button" class="small-btn add-parent" data-gp-index="${gpIndex}">Add New Parent Section</button>
+          <div class="parents-container" data-gp-index="${gpIndex}"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Hull Colors - Parent
+  function renderParent(parent, gpIndex, pIndex) {
+    return `
+      <div class="accordion parent" data-gp-index="${gpIndex}" data-p-index="${pIndex}">
+        <div class="accordion-header">
+          <div class="header-left">
+            <span class="section-name">${escapeHtml(parent.name || 'Parent ' + (pIndex + 1))}</span>
+            <button type="button" class="icon-btn edit-name" data-level="parent" data-gp-index="${gpIndex}" data-p-index="${pIndex}">✎</button>
+          </div>
+          <div class="header-right">
+            <button type="button" class="icon-btn toggle-accordion">−</button>
+            <button type="button" class="icon-btn danger delete-section" data-level="parent" data-gp-index="${gpIndex}" data-p-index="${pIndex}">×</button>
+          </div>
+        </div>
+        <div class="accordion-content">
+          <div class="form-group">
+            <label>Parent Section Name
+              <input class="parent-name-input" type="text" value="${escapeHtml(parent.name || '')}">
+            </label>
+            <label>Parent Feature Image
+              <input class="parent-feature-image" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+            </label>
+            <div class="parent-feature-preview"></div>
+          </div>
+          <button type="button" class="small-btn add-color" data-gp-index="${gpIndex}" data-p-index="${pIndex}">Add New Color</button>
+          <div class="colors-container" data-gp-index="${gpIndex}" data-p-index="${pIndex}"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Hull Colors - Color
+  function renderColor(color, gpIndex, pIndex, cIndex) {
+    return `
+      <div class="accordion color" data-gp-index="${gpIndex}" data-p-index="${pIndex}" data-c-index="${cIndex}">
+        <div class="accordion-header">
+          <div class="header-left">
+            <span class="section-name">${escapeHtml(color.name || 'Color ' + (cIndex + 1))}</span>
+            <button type="button" class="icon-btn edit-name" data-level="color" data-gp-index="${gpIndex}" data-p-index="${pIndex}" data-c-index="${cIndex}">✎</button>
+          </div>
+          <div class="header-right">
+            <button type="button" class="icon-btn toggle-accordion">−</button>
+            <button type="button" class="icon-btn danger delete-section" data-level="color" data-gp-index="${gpIndex}" data-p-index="${pIndex}" data-c-index="${cIndex}">×</button>
+          </div>
+        </div>
+        <div class="accordion-content">
+          <div class="form-group">
+            <label>Color Name
+              <input class="color-name-input" type="text" value="${escapeHtml(color.name || '')}">
+            </label>
+            <label>Price
+              <input class="color-price-input" type="number" step="0.01" value="${color.price || ''}">
+            </label>
+            <label>Color Code
+              <input class="color-code-input" type="text" value="${escapeHtml(color.colorCode || '')}">
+            </label>
+            <label>Color Image
+              <input class="color-image" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+            </label>
+            <div class="color-image-preview"></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderHullColors() {
+    if (!hullColors || hullColors.length === 0) {
+      $('#hullColorsContainer').html('<p class="empty-state">No hull colors added yet. Click "Add New Grand Parent Color" to start.</p>');
+      return;
+    }
+
+    let html = '';
+    hullColors.forEach((grandParent, gpIndex) => {
+      html += renderGrandParent(grandParent, gpIndex);
+
+      const parents = grandParent.parents || [];
+      parents.forEach((parent, pIndex) => {
+        html += renderParent(parent, gpIndex, pIndex);
+
+        const colors = parent.colors || [];
+        colors.forEach((color, cIndex) => {
+          html += renderColor(color, gpIndex, pIndex, cIndex);
+        });
+      });
+    });
+
+    $('#hullColorsContainer').html(html);
+  }
+
+  // Add Grand Parent
+  $('#addGrandParentBtn').on('click', function () {
+    hullColors.push({ name: 'Grand Parent ' + (hullColors.length + 1), parents: [] });
+    renderHullColors();
+  });
+
+  // Add Parent
+  $(document).on('click', '.add-parent', function () {
+    const gpIndex = $(this).data('gp-index');
+    if (!hullColors[gpIndex].parents) hullColors[gpIndex].parents = [];
+    hullColors[gpIndex].parents.push({ name: 'Parent ' + (hullColors[gpIndex].parents.length + 1), colors: [] });
+    renderHullColors();
+  });
+
+  // Add Color
+  $(document).on('click', '.add-color', function () {
+    const gpIndex = $(this).data('gp-index');
+    const pIndex = $(this).data('p-index');
+    if (!hullColors[gpIndex].parents[pIndex].colors) hullColors[gpIndex].parents[pIndex].colors = [];
+    hullColors[gpIndex].parents[pIndex].colors.push({ name: 'Color ' + (hullColors[gpIndex].parents[pIndex].colors.length + 1), price: 0, colorCode: '' });
+    renderHullColors();
+  });
+
+  // Delete Section
+  $(document).on('click', '.delete-section', function () {
+    const level = $(this).data('level');
+    const gpIndex = $(this).data('gp-index');
+
+    if (level === 'grandparent') {
+      if (!confirm('Delete this Grand Parent section and all its contents?')) return;
+      hullColors.splice(gpIndex, 1);
+    } else if (level === 'parent') {
+      const pIndex = $(this).data('p-index');
+      if (!confirm('Delete this Parent section and all its colors?')) return;
+      hullColors[gpIndex].parents.splice(pIndex, 1);
+    } else if (level === 'color') {
+      const pIndex = $(this).data('p-index');
+      const cIndex = $(this).data('c-index');
+      if (!confirm('Delete this color?')) return;
+      hullColors[gpIndex].parents[pIndex].colors.splice(cIndex, 1);
+    }
+
+    renderHullColors();
+  });
+
+  // Toggle Accordion
+  $(document).on('click', '.toggle-accordion', function () {
+    const accordion = $(this).closest('.accordion');
+    const content = accordion.find('.accordion-content');
+    content.slideToggle();
+    $(this).text(content.is(':visible') ? '−' : '+');
+  });
+
+  // Edit Name
+  let currentEditContext = null;
+
+  $(document).on('click', '.edit-name', function () {
+    const level = $(this).data('level');
+    const gpIndex = $(this).data('gp-index');
+    const pIndex = $(this).data('p-index');
+    const cIndex = $(this).data('c-index');
+
+    let currentName = '';
+    if (level === 'grandparent') {
+      currentName = hullColors[gpIndex].name || '';
+    } else if (level === 'parent') {
+      currentName = hullColors[gpIndex].parents[pIndex].name || '';
+    } else if (level === 'color') {
+      currentName = hullColors[gpIndex].parents[pIndex].colors[cIndex].name || '';
+    }
+
+    currentEditContext = { level, gpIndex, pIndex, cIndex };
+    $('#editNameInput').val(currentName);
+    $('#editNameModal').show();
+    $('#editNameInput').focus();
+  });
+
+  $('#cancelEditName').on('click', function () {
+    $('#editNameModal').hide();
+    currentEditContext = null;
+  });
+
+  $('#saveEditName').on('click', function () {
+    const newName = $('#editNameInput').val().trim();
+    if (!newName) {
+      showMessage('Name cannot be empty.', 'error');
+      return;
+    }
+
+    if (currentEditContext) {
+      const { level, gpIndex, pIndex, cIndex } = currentEditContext;
+      if (level === 'grandparent') {
+        hullColors[gpIndex].name = newName;
+      } else if (level === 'parent') {
+        hullColors[gpIndex].parents[pIndex].name = newName;
+      } else if (level === 'color') {
+        hullColors[gpIndex].parents[pIndex].colors[cIndex].name = newName;
+      }
+      renderHullColors();
+    }
+
+    $('#editNameModal').hide();
+    currentEditContext = null;
+  });
+
+  $('#editNameInput').on('keypress', function (e) {
+    if (e.which === 13) $('#saveEditName').click();
+  });
+
+  // Form Submission
+  $('#modelForm').on('submit', function (e) {
+    e.preventDefault();
+
+    if (mode === 'create' && !$('#featureImage')[0].files.length) return showMessage('Exactly one feature image is required.', 'error');
+    if (mode === 'create' && !$('#galleryImages')[0].files.length) return showMessage('At least one gallery image is required.', 'error');
+
+    // Collect hull colors data
+    const collectedHullColors = [];
+    $('.grand-parent').each(function () {
+      const gpIndex = $(this).data('gp-index');
+      const grandParent = {
+        name: hullColors[gpIndex].name,
+        parents: []
+      };
+
+      $(this).find('.parent').each(function () {
+        const pIndex = $(this).data('p-index');
+        const parent = {
+          name: $(this).find('.parent-name-input').val() || hullColors[gpIndex].parents[pIndex].name,
+          colors: []
+        };
+
+        $(this).find('.color').each(function () {
+          const cIndex = $(this).data('c-index');
+          const color = {
+            name: $(this).find('.color-name-input').val() || hullColors[gpIndex].parents[pIndex].colors[cIndex].name,
+            price: parseFloat($(this).find('.color-price-input').val()) || hullColors[gpIndex].parents[pIndex].colors[cIndex].price,
+            colorCode: $(this).find('.color-code-input').val() || hullColors[gpIndex].parents[pIndex].colors[cIndex].colorCode
+          };
+          parent.colors.push(color);
+        });
+
+        grandParent.parents.push(parent);
+      });
+
+      collectedHullColors.push(grandParent);
+    });
+
+    const formData = new FormData();
+    formData.append('title', $('#modelTitle').val());
+    formData.append('description', $('#modelDescription').val());
+    formData.append('year', $('#modelYear').val());
+    formData.append('make', $('#modelMake').val());
+    formData.append('model', $('#modelModel').val());
+    formData.append('category', $('#modelCategory').val());
+    formData.append('status', $('#modelStatus').val());
+    formData.append('hullColors', JSON.stringify(collectedHullColors));
+
+    const feature = $('#featureImage')[0].files[0];
+    if (feature) formData.append('featureImage', feature);
+    Array.from($('#galleryImages')[0].files).forEach(file => formData.append('galleryImages', file));
+
+    const isEdit = mode === 'edit';
+    $('#saveModelBtn').prop('disabled', true);
+    $.ajax({
+      url: isEdit ? '/api/admin/models/' + modelId : '/api/admin/models',
+      method: isEdit ? 'PUT' : 'POST',
+      data: formData,
+      processData: false,
+      contentType: false
+    }).done(() => {
+      showMessage(isEdit ? 'Model updated successfully.' : 'Model created successfully.', 'success');
+      setTimeout(() => { window.location.href = '/admin/list_model'; }, 500);
+    }).fail(handleAuthError).always(() => $('#saveModelBtn').prop('disabled', false));
+  });
+
+  // Load existing data for edit mode
+  if (mode === 'edit') {
+    if (!modelId) return showMessage('Model ID is missing.', 'error');
+    $.get('/api/admin/models/' + modelId).done(({ model }) => {
+      $('#modelTitle').val(model.title);
+      $('#modelDescription').val(model.description || '');
+      $('#modelYear').val(model.year);
+      $('#modelMake').val(model.make);
+      $('#modelModel').val(model.model);
+      $('#modelCategory').val(model.category);
+      $('#modelStatus').val(model.status);
+      hullColors = model.hullColors || [];
+      renderExistingImages(model);
+      renderHullColors();
+    }).fail(handleAuthError);
+  } else {
+    renderHullColors();
+  }
+});
+</script>
